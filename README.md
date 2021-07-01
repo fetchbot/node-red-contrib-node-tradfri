@@ -131,6 +131,9 @@ If a status request is send or a device's state is updated, the node will respon
 
 ## Changelog
 
+### 0.3.3
+* [Workaround](https://github.com/AlCalzone/node-tradfri-client/releases/tag/v3.0.1) for a bug in IKEA gateway firmware `v1.15.x`
+
 ### 0.3.0
 * One combined node for all device types
 * Temporary fix for the blind stop function
