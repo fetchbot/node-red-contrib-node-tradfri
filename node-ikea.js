@@ -558,7 +558,7 @@ module.exports = function (RED) {
                     RED.log.debug(`[IKEA: ${node.id}] GroupOp '${JSON.stringify(groupOp)}' returned '${res}'`);
                 }
             }
-            catch (e) {g
+            catch (e) {
                 RED.log.debug(`[IKEA: ${node.id}] GroupOp '${JSON.stringify(groupOp)}' unsuccessful, '${e.toString()}'`);
             }
         });
