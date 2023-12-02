@@ -23,10 +23,7 @@ module.exports = function (RED) {
             return;
         }
         let blinds = node.getBlinds();
-        let ret = [];
-        for (let k in blinds) {
-            ret.push({ name: blinds[k].name, id: k });
-        }
+        let ret = Object.entries(blinds).map(([k, v]) => ({ name: v.name, id: k }));
         res.json(JSON.stringify(ret));
     });
 
@@ -38,10 +35,7 @@ module.exports = function (RED) {
             return;
         }
         let lights = node.getLights();
-        let ret = [];
-        for (let k in lights) {
-            ret.push({ name: lights[k].name, id: k });
-        }
+        let ret = Object.entries(lights).map(([k, v]) => ({ name: v.name, id: k }));
         res.json(JSON.stringify(ret));
     });
 
@@ -53,10 +47,7 @@ module.exports = function (RED) {
             return;
         }
         let plugs = node.getPlugs();
-        let ret = [];
-        for (let k in plugs) {
-            ret.push({ name: plugs[k].name, id: k });
-        }
+        let ret = Object.entries(plugs).map(([k, v]) => ({ name: v.name, id: k }));
         res.json(JSON.stringify(ret));
     });
 
@@ -68,10 +59,7 @@ module.exports = function (RED) {
             return;
         }
         let sensors = node.getSensors();
-        let ret = [];
-        for (let k in sensors) {
-            ret.push({ name: sensors[k].name, id: k });
-        }
+        let ret = Object.entries(lights).map(([k, v]) => ({ name: v.name, id: k }));
         res.json(JSON.stringify(ret));
     });
 
@@ -83,10 +71,7 @@ module.exports = function (RED) {
             return;
         }
         let remotes = node.getRemotes();
-        let ret = [];
-        for (let k in remotes) {
-            ret.push({ name: remotes[k].name, id: k });
-        }
+        let ret = Object.entries(remotes).map(([k, v]) => ({ name: v.name, id: k }));
         res.json(JSON.stringify(ret));
     });
 
@@ -98,10 +83,7 @@ module.exports = function (RED) {
             return;
         }
         let groups = node.getGroups();
-        let ret = [];
-        for (let k in groups) {
-            ret.push({ name: groups[k].name, id: k });
-        }
+        let ret = Object.entries(groups).map(([k, v]) => ({ name: v.name, id: k }));
         res.json(JSON.stringify(ret));
     });
 
@@ -207,26 +189,48 @@ module.exports = function (RED) {
                 }
             };
 
-            //let client = new ikea.TradfriClient(node.address);
-            //let client = new ikea.TradfriClient(node.address,{"watchConnection":true});
-            //let client = new ikea.TradfriClient(node.address,loggerFunction);
-            let client = new ikea.TradfriClient(node.address,{"customLogger":loggerFunction,"watchConnection":true});
+            try {
+                let client = new ikea.TradfriClient(node.address,{"customLogger":loggerFunction,"watchConnection":true});
 
-            if (node.identity == null && node.psk == null) {
-                const { identity, psk } = yield client.authenticate(node.securityCode);
-                node.identity = identity;
-                node.psk = psk;
-            }
+                if (node.identity == null && node.psk == null) {
+                    try {
+                        const { identity, psk } = yield client.authenticate(node.securityCode);
+                        node.identity = identity;
+                        node.psk = psk;
+                    } catch (e) {
+                        if (e instanceof TradfriError) {
+                            switch (e.code) {
+                                case TradfriErrorCodes.ConnectionTimedOut: {
+                                    // The gateway is unreachable or did not respond in time
+                                    RED.log.error(`[IKEA: ${node.id}] ${e.toString()}, connection timed out...`);
+                                }
+                                case TradfriErrorCodes.AuthenticationFailed: {
+                                    // The security code is wrong or something else went wrong with the authentication.
+                                    // Check the error message for details. It might be that this library has to be updated
+                                    // to be compatible with a new firmware.
+                                    RED.log.error(`[IKEA: ${node.id}] ${e.toString()}, authentication failed...`);
+                                }
+                                case TradfriErrorCodes.ConnectionFailed: {
+                                    // An unknown error happened while trying to connect
+                                    RED.log.error(`[IKEA: ${node.id}] ${e.toString()}, connection failed...`);
+                                }
+                            }
+                        }
+                    }
+                }
 
-            if (yield client.connect(node.identity, node.psk)) {
-                client.on("device updated", _deviceUpdatedCallback);
-                client.on("group updated", _groupUpdatedCallback);
-                client.on("scene updated", _sceneUpdatedCallback);
-                client.observeDevices();
-                client.observeGroupsAndScenes();
-                _client = client;
-            } else {
-                throw new Error(`Client not available`);
+                if (yield client.connect(node.identity, node.psk)) {
+                    client.on("device updated", _deviceUpdatedCallback);
+                    client.on("group updated", _groupUpdatedCallback);
+                    client.on("scene updated", _sceneUpdatedCallback);
+                    client.observeDevices();
+                    client.observeGroupsAndScenes();
+                    _client = client;
+                } else {
+                    throw new Error(`Client connection failed`);
+                }
+            } catch (e) {
+                RED.log.error(`[IKEA: ${node.id}] ${e.toString()}, setup failed...`);
             }
         });
 
@@ -239,29 +243,13 @@ module.exports = function (RED) {
             while (_client == null) {
                 try {
                     yield _setupClient();
-                }
-                catch (e) {
+                } catch (e) {
                     RED.log.trace(`[IKEA: ${node.id}] ${e.toString()}, reconnecting...`);
                 }
                 yield new Promise(resolve => setTimeout(resolve, timeout));
             }
         });
 
-/*
-        let pingInterval = 30;
-
-        let _ping = setInterval(() => __awaiter(this, void 0, void 0, function* () {
-            let client;
-            try {
-                client = yield node.getClient();
-                let res = yield client.ping();
-                RED.log.trace(`[IKEA: ${node.id}] ping returned '${res}'`);
-            }
-            catch (e) {
-                RED.log.trace(`[IKEA: ${node.id}] ping returned '${e.toString()}'`);
-            }
-        }), pingInterval * 1000);
-*/
         _reconnect();
 
         node.getClient = () => __awaiter(this, void 0, void 0, function* () {
@@ -414,7 +402,6 @@ module.exports = function (RED) {
         };
 
         node.on('close', () => {
-            clearInterval(_ping);
             _client.destroy();
             RED.log.debug(`[IKEA: ${node.id}] Config was closed`);
         });
@@ -512,8 +499,7 @@ module.exports = function (RED) {
                     }
                     RED.log.debug(`[IKEA: ${node.id}] BlindOp '${JSON.stringify(blindOp)}' returned '${res}'`);
                 }
-            }
-            catch (e) {
+            } catch (e) {
                 RED.log.debug(`[IKEA: ${node.id}] BlindOp '${JSON.stringify(blindOp)}' unsuccessful, '${e.toString()}'`);
             }
         });
@@ -527,8 +513,7 @@ module.exports = function (RED) {
                     let res = yield client.operateLight(light, lightOp);
                     RED.log.debug(`[IKEA: ${node.id}] LightOp '${JSON.stringify(lightOp)}' returned '${res}'`);
                 }
-            }
-            catch (e) {
+            } catch (e) {
                 RED.log.debug(`[IKEA: ${node.id}] LightOp '${JSON.stringify(lightOp)}' unsuccessful, '${e.toString()}'`);
             }
         });
@@ -542,8 +527,7 @@ module.exports = function (RED) {
                     let res = yield client.operatePlug(plug, plugOp);
                     RED.log.debug(`[IKEA: ${node.id}] PlugOp '${JSON.stringify(plugOp)}' returned '${res}'`);
                 }
-            }
-            catch (e) {
+            } catch (e) {
                 RED.log.debug(`[IKEA: ${node.id}] PlugOp '${JSON.stringify(plugOp)}' unsuccessful, '${e.toString()}'`);
             }
         });
@@ -557,8 +541,7 @@ module.exports = function (RED) {
                     let res = yield client.operateGroup(group, groupOp, true);
                     RED.log.debug(`[IKEA: ${node.id}] GroupOp '${JSON.stringify(groupOp)}' returned '${res}'`);
                 }
-            }
-            catch (e) {
+            } catch (e) {
                 RED.log.debug(`[IKEA: ${node.id}] GroupOp '${JSON.stringify(groupOp)}' unsuccessful, '${e.toString()}'`);
             }
         });

@@ -5,10 +5,6 @@ Node-RED node to interface with IKEA smart home products as tradfri lights or bl
 * All operations (brightness, color temperature, color, etc.) supported by the gateway are available.
 * Support for observation (i.e. reporting on changes to the light).
 
-# ⚠️ WARNING ⚠️
-### Version 0.3.X upgrade is a breaking change.
-This version **combines** the individual device nodes to a common node which can now be adjusted in the node configuration.
-
 ## Usage
 There is one node to configure each accessory type (besides the config node). After the configuration has been successful -- either by providing an existing identity and PSK or by generating new ones by providing the security code from the gateway -- simply select which accessory or group to target and check if the node should observe the device as well.
 
